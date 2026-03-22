@@ -1,0 +1,398 @@
+{
+  "info": {
+    "_postman_id": "d4e8f1a2-3b4c-5d6e-7f8g-h9i0j1k2l3m4",
+    "name": "ChocoApp - Product API Tests",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Complete Postman collection for testing the ChocoApp Product API with image uploads"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin_password\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/admin/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "admin", "login"]
+            },
+            "description": "Login as admin to get JWT token for subsequent requests"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var responseJson = pm.response.json();",
+                  "",
+                  "// Set the admin token in environment",
+                  "if(responseJson.data && responseJson.data.token) {",
+                  "    pm.environment.set(\"admin_token\", responseJson.data.token);",
+                  "} else {",
+                  "}",
+                  "",
+                  "// Test response",
+                  "pm.test('Admin login successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('token');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "item": [
+        {
+          "name": "Get All Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var responseJson = pm.response.json();",
+                  "",
+                  "pm.test('Get all products successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('products');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product with Images (Form Data)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Premium Dark Chocolate",
+                  "type": "text"
+                },
+                {
+                  "key": "description",
+                  "value": "Rich and creamy dark chocolate with 70% cocoa content",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "8.99",
+                  "type": "text"
+                },
+                {
+                  "key": "category",
+                  "value": "Bars",
+                  "type": "text"
+                },
+                {
+                  "key": "inStock",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "stock",
+                  "value": "100",
+                  "type": "text"
+                },
+                {
+                  "key": "weight",
+                  "value": "100g",
+                  "type": "text"
+                },
+                {
+                  "key": "ingredients",
+                  "value": "[\"Cocoa\", \"Sugar\", \"Cocoa Butter\"]",
+                  "type": "text"
+                },
+                {
+                  "key": "mainImage",
+                  "description": "Main product image (optional if using image URLs)",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "additionalImages",
+                  "description": "Additional product images (optional)",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "additionalImages",
+                  "description": "Additional product images (optional)",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Create a new product with image uploads. Update the file paths in the form data before sending."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var responseJson = pm.response.json();",
+                  "",
+                  "pm.test('Product created successfully', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('product');",
+                  "    pm.expect(responseJson.data.product).to.have.property('image'); // Main image URL",
+                  "    pm.expect(responseJson.data.product).to.have.property('images'); // Additional images array",
+                  "    pm.expect(responseJson.data.product.name).to.equal('Premium Dark Chocolate');",
+                  "    ",
+                  "    // Store the created product ID for later use",
+                  "    pm.environment.set('created_product_id', responseJson.data.product._id);",
+                  "});",
+                  "",
+                  "// Log the created product ID",
+                  "console.log('Created product ID:', responseJson.data.product._id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product with Image URLs (JSON)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "name": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Milk Chocolate Bar\",\n  \"description\": \"Creamy milk chocolate with caramel filling\",\n  \"price\": 6.99,\n  \"category\": \"Bars\",\n  \"inStock\": true,\n  \"stock\": 50,\n  \"weight\": \"80g\",\n  \"ingredients\": [\"Cocoa\", \"Sugar\", \"Milk\", \"Caramel\"],\n  \"image\": \"https://res.cloudinary.com/chocoapp/image/upload/v123456789/milk_chocolate_main.jpg\",\n  \"images\": [\n    \"https://res.cloudinary.com/chocoapp/image/upload/v123456789/milk_chocolate_side.jpg\",\n    \"https://res.cloudinary.com/chocoapp/image/upload/v123456789/milk_chocolate_back.jpg\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"]
+            },
+            "description": "Create a new product with pre-uploaded image URLs"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var responseJson = pm.response.json();",
+                  "",
+                  "pm.test('Product created with image URLs', function () {",
+                  "    pm.response.to.have.status(201);",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('product');",
+                  "    pm.expect(responseJson.data.product).to.have.property('image');",
+                  "    pm.expect(responseJson.data.product.image).to.include('cloudinary.com');",
+                  "    pm.expect(responseJson.data.product.images).to.be.an('array');",
+                  "    pm.expect(responseJson.data.product.name).to.equal('Milk Chocolate Bar');",
+                  "    ",
+                  "    // Store the created product ID for later use",
+                  "    pm.environment.set('created_product_id_json', responseJson.data.product._id);",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update Product with New Images",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{admin_token}}",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "name",
+                  "value": "Premium Dark Chocolate - Updated",
+                  "type": "text"
+                },
+                {
+                  "key": "price",
+                  "value": "9.99",
+                  "type": "text"
+                },
+                {
+                  "key": "mainImage",
+                  "description": "New main product image",
+                  "type": "file",
+                  "src": []
+                },
+                {
+                  "key": "additionalImages",
+                  "description": "New additional product images",
+                  "type": "file",
+                  "src": []
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{created_product_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{created_product_id}}"]
+            },
+            "description": "Update an existing product with new images. Replace {{created_product_id}} with actual product ID."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var responseJson = pm.response.json();",
+                  "",
+                  "pm.test('Product updated successfully', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('product');",
+                  "    pm.expect(responseJson.data.product.name).to.include('Updated');",
+                  "    pm.expect(responseJson.data.product).to.have.property('image');",
+                  "    pm.expect(responseJson.data.product).to.have.property('images');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Product by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products/{{created_product_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products", "{{created_product_id}}"]
+            }
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var responseJson = pm.response.json();",
+                  "",
+                  "pm.test('Get product by ID successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    pm.expect(responseJson.success).to.be.true;",
+                  "    pm.expect(responseJson.data).to.have.property('product');",
+                  "    pm.expect(responseJson.data.product).to.have.property('_id');",
+                  "    pm.expect(responseJson.data.product).to.have.property('image');",
+                  "    pm.expect(responseJson.data.product).to.have.property('images');",
+                  "});"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "exec": [
+          ""
+        ],
+        "type": "text/javascript"
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "exec": [
+          ""
+        ],
+        "type": "text/javascript"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5001"
+    }
+  ]
+}
