@@ -99,6 +99,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.send('<h1>ShopNova API is Running Ready to host on Vercel</h1>');
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
