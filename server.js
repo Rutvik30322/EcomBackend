@@ -128,46 +128,10 @@ app.use((req, res) => {
 
 app.use(errorHandler);
 
-const httpServer = createServer(app);
-
-const io = new Server(httpServer, {
-  cors: {
-    origin: process.env.NODE_ENV === 'production'
-      ? process.env.CLIENT_URL
-      : ['http://localhost:3000', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://172.16.10.249:3001'],
-    credentials: true,
-    methods: ['GET', 'POST'],
-  },
-});
-
-io.on('connection', (socket) => {
-
-  socket.on('join-admin', () => {
-    socket.join('admin');
-
-  });
-
-  socket.on('request-dashboard-update', async () => {
-    try {
-      const { emitDashboardStatsUpdate } = await import('./utils/notifications.js');
-      await emitDashboardStatsUpdate();
-    } catch (error) {
-      console.error('Error handling dashboard update request:', error);
-    }
-  });
-
-  socket.on('disconnect', () => {
-
-  });
-});
-
-global.io = io;
-
 const getLocalIP = () => {
   const nets = networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
-
       if (net.family === 'IPv4' && !net.internal) {
         return net.address;
       }
@@ -176,16 +140,43 @@ const getLocalIP = () => {
   return 'localhost';
 };
 
-const PORT = process.env.PORT || 5001;
-const HOST = '0.0.0.0'; // Listen on all network interfaces
-
 if (!process.env.VERCEL) {
+  const httpServer = createServer(app);
+  io = new Server(httpServer, {
+    cors: {
+      origin: process.env.NODE_ENV === 'production'
+        ? process.env.CLIENT_URL
+        : ['http://localhost:3000', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://172.16.10.249:3001'],
+      credentials: true,
+      methods: ['GET', 'POST'],
+    },
+  });
+
+  io.on('connection', (socket) => {
+    socket.on('join-admin', () => {
+      socket.join('admin');
+    });
+
+    socket.on('request-dashboard-update', async () => {
+      try {
+        const { emitDashboardStatsUpdate } = await import('./utils/notifications.js');
+        await emitDashboardStatsUpdate();
+      } catch (error) {
+        console.error('Error handling dashboard update request:', error);
+      }
+    });
+  });
+
+  global.io = io;
+
+  const PORT = process.env.PORT || 5001;
+  const HOST = '0.0.0.0';
   const LOCAL_IP = getLocalIP();
+  
   httpServer.listen(PORT, HOST, () => {
     console.log(`🚀 Server running in ${process.env.NODE_ENV} mode`);
     console.log(`Local: http://localhost:${PORT}`);
     console.log(`Network: http://${LOCAL_IP}:${PORT}`);
-    console.log(`Health Check: http://${LOCAL_IP}:${PORT}/api/health`);
   });
 }
 
