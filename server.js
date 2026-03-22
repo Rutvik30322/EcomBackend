@@ -34,60 +34,69 @@ dotenv.config();
 
 const app = express();
 
-// 1. DATABASE
-if (process.env.MONGODB_URI) {
-    connectDB().catch(err => console.error('DB Connection Error:', err));
-}
+connectDB();
+initCronJobs();
 
-// 2. MIDDLEWARE
+configureCloudinary();
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(compression());
-app.use(helmet({ contentSecurityPolicy: false }));
 
 app.use(cors({
-    origin: (origin, callback) => {
-        const allowed = process.env.NODE_ENV === 'production'
-            ? [process.env.CLIENT_URL || '*', 'https://rutvik30322.github.io']
-            : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001'];
-        if (!origin || allowed.includes(origin) || allowed.includes('*')) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true
+  origin: process.env.NODE_ENV === 'production'
+    ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, /\.vercel\.app$/] : true)
+    : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'], // Allow specific dev origins
+  credentials: true,
+  exposedHeaders: ['Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
+app.use(helmet());
+app.use(compression());
+
 if (process.env.NODE_ENV === 'development') {
-    app.use(morgan('dev'));
+  app.use(morgan('dev'));
 }
 
-// 3. LIMITER
-const limiter = rateLimit({
-    windowMs: 1 * 60 * 1000,
-    max: 500,
-    message: 'Too many requests',
-    skip: (req) => req.path === '/' || req.path === '/api/health'
+const generalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window (reduced from 15 minutes)
+  max: 200, // limit each IP to 200 requests per minute (increased from 100 per 15 min)
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  skip: (req) => {
+
+    return req.path === '/api/health';
+  },
 });
-app.use('/api', limiter);
 
-// 4. ROUTES
-app.get('/api/health', (req, res) => res.json({ status: 'ok', env: process.env.VERCEL ? 'vercel' : 'local' }));
+const adminLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 500, // Higher limit for admin operations (500 requests per minute)
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
 
-app.get('/', (req, res) => {
-    res.send(`
-    <div style="font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f0f2f5;">
-      <div style="background: white; padding: 3rem; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center;">
-        <h1 style="color: #4f46e5; font-size: 2.5rem; margin-bottom: 1rem;">ShopNova API</h1>
-        <div style="display: inline-block; padding: 0.5rem 1.5rem; background: #d1fae5; color: #065f46; border-radius: 50px; font-weight: bold; font-size: 1.2rem;">
-          ● RUNNING
-        </div>
-        <p style="margin-top: 1.5rem; color: #6b7280;">Backend is active and serving requests.</p>
-        <p style="font-size: 0.8rem; color: #9ca3af; margin-top: 2rem;">Vercel Serverless Ready</p>
-      </div>
-    </div>
-  `);
+app.use('/api/orders/admin', adminLimiter);
+app.use('/api/users', adminLimiter);
+app.use('/api/admins', adminLimiter);
+app.use('/api/products', adminLimiter);
+app.use('/api/categories', adminLimiter);
+app.use('/api/reviews', adminLimiter);
+app.use('/api/banners', adminLimiter);
+app.use('/api/orders', adminLimiter);
+app.use('/api/brands', adminLimiter);
+
+app.use('/api', generalLimiter);
+
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'Server is running',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 app.use('/api/auth', authRoutes);
@@ -104,40 +113,72 @@ app.use('/api/banners', bannerRoutes);
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/purchases', purchaseRoutes);
-app.use('/api/brand', brandRoutes);
+app.use('/api/brands', brandRoutes);
 
-// 5. ERROR HANDLING
-app.use((req, res) => res.status(404).json({ success: false, message: 'Not Found' }));
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+  });
+});
+
 app.use(errorHandler);
 
-// 6. SERVER & SOCKETS (LOCAL ONLY)
-let io = null;
-if (!process.env.VERCEL) {
-    const startServer = async () => {
-        try {
-            configureCloudinary();
-            initCronJobs();
-            
-            const httpServer = createServer(app);
-            io = new Server(httpServer, {
-                cors: { origin: '*', credentials: true }
-            });
+const httpServer = createServer(app);
 
-            io.on('connection', (socket) => {
-                socket.on('join-admin', () => socket.join('admin'));
-            });
+const io = new Server(httpServer, {
+  cors: {
+    origin: process.env.NODE_ENV === 'production'
+      ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, /\.vercel\.app$/] : true)
+      : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'],
+    credentials: true,
+    methods: ['GET', 'POST'],
+  },
+});
 
-            global.io = io;
-            const PORT = process.env.PORT || 5001;
-            httpServer.listen(PORT, '0.0.0.0', () => {
-                console.log(`🚀 Local Server: http://localhost:${PORT}`);
-            });
-        } catch (err) {
-            console.error('Local startup error:', err);
-        }
-    };
-    startServer();
-}
+io.on('connection', (socket) => {
+
+  socket.on('join-admin', () => {
+    socket.join('admin');
+
+  });
+
+  socket.on('request-dashboard-update', async () => {
+    try {
+      const { emitDashboardStatsUpdate } = await import('./utils/notifications.js');
+      await emitDashboardStatsUpdate();
+    } catch (error) {
+      console.error('Error handling dashboard update request:', error);
+    }
+  });
+
+  socket.on('disconnect', () => {
+
+  });
+});
+
+global.io = io;
+
+const getLocalIP = () => {
+  const nets = networkInterfaces();
+  for (const name of Object.keys(nets)) {
+    for (const net of nets[name]) {
+
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
+};
+
+const PORT = process.env.PORT || 5001;
+const HOST = '0.0.0.0'; // Listen on all network interfaces
+const LOCAL_IP = getLocalIP();
+
+httpServer.listen(PORT, HOST, () => {
+
+});
 
 export default app;
 export { io };
