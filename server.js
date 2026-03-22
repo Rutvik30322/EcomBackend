@@ -52,9 +52,18 @@ configureCloudinary();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production'
-    ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'https://rutvik30322.github.io'] : '*')
-    : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'],
+  origin: (origin, callback) => {
+    const allowed = process.env.NODE_ENV === 'production'
+      ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'https://rutvik30322.github.io'] : ['*'])
+      : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin || allowed.indexOf(origin) !== -1 || allowed[0] === '*') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   exposedHeaders: ['Authorization'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
