@@ -51,8 +51,6 @@ configureCloudinary();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// ... rest of the middleware ... (omitted for brevity in replacement but kept in logic)
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'https://rutvik30322.github.io'] : '*')
@@ -185,4 +183,4 @@ if (!process.env.VERCEL) {
 }
 
 export default app;
-export { io }; };
+export { io };
