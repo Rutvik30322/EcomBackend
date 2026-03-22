@@ -14,7 +14,6 @@ const connectDB = async () => {
   } catch (error) {
     console.error(`❌ MongoDB Connection Error: ${error.message}`);
     console.error(`💡 Make sure MongoDB is running (if using local) or check your connection string (if using Atlas)`);
-    process.exit(1);
   }
 };
 

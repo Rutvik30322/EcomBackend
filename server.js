@@ -174,11 +174,16 @@ const getLocalIP = () => {
 
 const PORT = process.env.PORT || 5001;
 const HOST = '0.0.0.0'; // Listen on all network interfaces
-const LOCAL_IP = getLocalIP();
 
-httpServer.listen(PORT, HOST, () => {
-
-});
+if (!process.env.VERCEL) {
+  const LOCAL_IP = getLocalIP();
+  httpServer.listen(PORT, HOST, () => {
+    console.log(`🚀 Server running in ${process.env.NODE_ENV} mode`);
+    console.log(`Local: http://localhost:${PORT}`);
+    console.log(`Network: http://${LOCAL_IP}:${PORT}`);
+    console.log(`Health Check: http://${LOCAL_IP}:${PORT}/api/health`);
+  });
+}
 
 export default app;
 export { io };
