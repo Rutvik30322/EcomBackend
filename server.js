@@ -34,25 +34,38 @@ dotenv.config();
 
 const app = express();
 
-connectDB();
-initCronJobs();
+// Database Connection - only connect if MONGODB_URI is present
+// On Vercel, we don't want to block the entire function start if DB is slow
+if (process.env.MONGODB_URI) {
+  connectDB().catch(err => console.error('Initial DB connection error:', err));
+} else {
+  console.warn('⚠️ MONGODB_URI is missing. Database features will fail.');
+}
+
+// Only run Cron Jobs locally (they don't work on Vercel Serverless anyway)
+if (!process.env.VERCEL) {
+  initCronJobs();
+}
 
 configureCloudinary();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ... rest of the middleware ... (omitted for brevity in replacement but kept in logic)
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
-    ? process.env.CLIENT_URL
-    : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001',], // Allow specific dev origins
+    ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, 'https://rutvik30322.github.io'] : '*')
+    : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'],
   credentials: true,
   exposedHeaders: ['Authorization'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable only if needed for specific integrations
+}));
 app.use(compression());
 
 if (process.env.NODE_ENV === 'development') {
@@ -60,49 +73,44 @@ if (process.env.NODE_ENV === 'development') {
 }
 
 const generalLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute window (reduced from 15 minutes)
-  max: 200, // limit each IP to 200 requests per minute (increased from 100 per 15 min)
-  message: 'Too many requests from this IP, please try again later.',
-  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
-  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
-  skip: (req) => {
-
-    return req.path === '/api/health';
-  },
-});
-
-const adminLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute window
-  max: 500, // Higher limit for admin operations (500 requests per minute)
+  windowMs: 1 * 60 * 1000,
+  max: 200,
   message: 'Too many requests from this IP, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => req.path === '/api/health' || req.path === '/',
 });
-
-app.use('/api/orders/admin', adminLimiter);
-app.use('/api/users', adminLimiter);
-app.use('/api/admins', adminLimiter);
-app.use('/api/products', adminLimiter);
-app.use('/api/categories', adminLimiter);
-app.use('/api/reviews', adminLimiter);
-app.use('/api/banners', adminLimiter);
-app.use('/api/orders', adminLimiter);
-app.use('/api/brands', adminLimiter);
 
 app.use('/api', generalLimiter);
 
+// Health Check and Root Routes
 app.get('/api/health', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Server is running',
+    status: 'online',
+    message: 'ShopNova API is running correctly',
+    environment: process.env.VERCEL ? 'vercel' : 'local',
     timestamp: new Date().toISOString(),
   });
 });
 
 app.get('/', (req, res) => {
-  res.send('<h1>ShopNova API is Running Ready to host on Vercel</h1>');
+  res.send(`
+    <div style="font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #f3f4f6; color: #1f2937;">
+      <div style="background: white; padding: 2rem; border-radius: 12px; shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1); text-align: center;">
+        <h1 style="color: #4f46e5; margin-bottom: 0.5rem;">🚀 ShopNova API</h1>
+        <p style="font-size: 1.2rem; color: #4b5563;">Status: <span style="color: #059669; font-weight: bold;">RUNNING</span></p>
+        <hr style="border: 0; border-top: 1px solid #e5e7eb; margin: 1.5rem 0;">
+        <p style="font-size: 0.9rem; color: #6b7280;">Backend version 1.0.0 | Environment: ${process.env.VERCEL ? 'Vercel Serverless' : 'Local Node'}</p>
+        <div style="margin-top: 1.5rem;">
+          <a href="/api/health" style="text-decoration: none; color: white; background: #4f46e5; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 500;">Check API Health</a>
+        </div>
+      </div>
+    </div>
+  `);
 });
 
+// API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
@@ -119,6 +127,7 @@ app.use('/api/notifications', notificationRoutes);
 app.use('/api/purchases', purchaseRoutes);
 app.use('/api/brands', brandRoutes);
 
+// 404 Handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,
@@ -132,13 +141,13 @@ const getLocalIP = () => {
   const nets = networkInterfaces();
   for (const name of Object.keys(nets)) {
     for (const net of nets[name]) {
-      if (net.family === 'IPv4' && !net.internal) {
-        return net.address;
-      }
+      if (net.family === 'IPv4' && !net.internal) return net.address;
     }
   }
   return 'localhost';
 };
+
+let io = null;
 
 if (!process.env.VERCEL) {
   const httpServer = createServer(app);
@@ -146,23 +155,20 @@ if (!process.env.VERCEL) {
     cors: {
       origin: process.env.NODE_ENV === 'production'
         ? process.env.CLIENT_URL
-        : ['http://localhost:3000', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://172.16.10.249:3001'],
+        : ['http://localhost:3000', 'http://localhost:5173', 'http://172.20.10.5:3001'],
       credentials: true,
       methods: ['GET', 'POST'],
     },
   });
 
   io.on('connection', (socket) => {
-    socket.on('join-admin', () => {
-      socket.join('admin');
-    });
-
+    socket.on('join-admin', () => socket.join('admin'));
     socket.on('request-dashboard-update', async () => {
       try {
         const { emitDashboardStatsUpdate } = await import('./utils/notifications.js');
         await emitDashboardStatsUpdate();
       } catch (error) {
-        console.error('Error handling dashboard update request:', error);
+        console.error('Socket dashboard update error:', error);
       }
     });
   });
@@ -174,11 +180,9 @@ if (!process.env.VERCEL) {
   const LOCAL_IP = getLocalIP();
   
   httpServer.listen(PORT, HOST, () => {
-    console.log(`🚀 Server running in ${process.env.NODE_ENV} mode`);
-    console.log(`Local: http://localhost:${PORT}`);
-    console.log(`Network: http://${LOCAL_IP}:${PORT}`);
+    console.log(`🚀 Server running locally at http://${LOCAL_IP}:${PORT}`);
   });
 }
 
 export default app;
-export { io };
+export { io }; };
