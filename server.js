@@ -45,7 +45,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production'
     ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, /\.vercel\.app$/] : true)
-    : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'], // Allow specific dev origins
+    : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001', 'https://ecom-front-liart.vercel.app'], // Allow specific dev origins
   credentials: true,
   exposedHeaders: ['Authorization'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
@@ -130,7 +130,7 @@ const io = new Server(httpServer, {
   cors: {
     origin: process.env.NODE_ENV === 'production'
       ? (process.env.CLIENT_URL ? [process.env.CLIENT_URL, /\.vercel\.app$/] : true)
-      : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001'],
+      : ['http://localhost:3001', 'http://localhost:5173', 'http://172.20.10.5:3001', 'http://180.179.21.98:3001', 'https://ecom-front-liart.vercel.app'],
     credentials: true,
     methods: ['GET', 'POST'],
   },
@@ -177,7 +177,7 @@ const HOST = '0.0.0.0'; // Listen on all network interfaces
 const LOCAL_IP = getLocalIP();
 
 httpServer.listen(PORT, HOST, () => {
-
+  console.log(`Server is running on port ${PORT}`);
 });
 
 export default app;
